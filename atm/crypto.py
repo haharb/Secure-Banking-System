@@ -4,30 +4,34 @@ from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.PublicKey import DSA
+from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Cipher import AES
 import sys
 from pymongo import HASHED
 #Create DSA key
-def createDSAkeypair(owner):
-    key = DSA.generate(2048)
-    f = open("public_key.pem", "w")
-    f.write(key.publickey().export_key())
-    f.close()
+# def createDSAkeypair(owner):
+#     key = DSA.generate(2048)
+#     f = open("public_key.pem", "w")
+#     f.write(key.publickey().export_key())
+#     f.close()
 
-# Loads key from pem file
-def loadKey(fileName):
-    return RSA.import_key(open(fileName).read())
+# Loads key for RSA from pem file, prefix denotes whose key it is, and if it private or public
+def loadKeyRSA(fileNamePrefix):
+    return RSA.import_key(open("%s_key_RSA.pem"%(fileNamePrefix)).read())
+# Loads key for DSA from pem file, prefix denotes whose key it is, and if it private or public
+def loadKeyDSA(fileNamePrefix):
+    return ECC.import_key(open("%s_key_DSA.pem"%(fileNamePrefix)).read())
 # Encrypts bytes using a given key
 def encrypt_message(message, key):
     cipher_rsa_encrypt = PKCS1_OAEP.new(key, hashAlgo=None, mgfunc=None, randfunc=None)
     cipherBytes = cipher_rsa_encrypt.encrypt(message)
     return cipherBytes
-#Sign message with RSA
+#Sign message with RSA, key is a imported from a file, message is bytes representation of a string
 def sign_messageRSA(message, key):
     h = SHA256.new(message)
-    return pss.net(key).sign(h)
-#Sign message with RSA
+    return pkcs1_15.new(key).sign(h)
+#Sign message with DSA, key is a imported from a file, message is bytes representation of a string
 def sign_messageDSA(message, key):
     h = SHA256.new(message)
     return pss.net(key).sign(h)
@@ -37,7 +41,7 @@ def decrypt_message(cipherBytes, key):
     decryptedBytes = cipher_rsa_decrypt.decrypt(cipherBytes)
     return decryptedBytes
 
-def verify_signature(message, signature, public_key):
+def verify_signatureDSA(message, signature, public_key):
     try:
         public_key.verify(
             signature,
