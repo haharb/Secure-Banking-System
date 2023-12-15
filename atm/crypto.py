@@ -3,10 +3,18 @@ from Crypto.Signature import pss
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto import Random
-from Cryptodome.PublicKey import RSA
-from Cryptodome.Cipher import PKCS1_OAEP
+from Crypto.PublicKey import DSA
+from Crypto.Signature import DSS
+from Crypto.Cipher import AES
 import sys
 from pymongo import HASHED
+#Create DSA key
+def createDSAkeypair(owner):
+    key = DSA.generate(2048)
+    f = open("public_key.pem", "w")
+    f.write(key.publickey().export_key())
+    f.close()
+
 # Loads key from pem file
 def loadKey(fileName):
     return RSA.import_key(open(fileName).read())
@@ -19,7 +27,10 @@ def encrypt_message(message, key):
 def sign_messageRSA(message, key):
     h = SHA256.new(message)
     return pss.net(key).sign(h)
-
+#Sign message with RSA
+def sign_messageDSA(message, key):
+    h = SHA256.new(message)
+    return pss.net(key).sign(h)
 # Decrypts a bytes message using a given key
 def decrypt_message(cipherBytes, key):
     cipher_rsa_decrypt = PKCS1_OAEP.new(key, hashAlgo=None, mgfunc=None, randfunc=None)
