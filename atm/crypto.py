@@ -4,11 +4,11 @@ from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto import Random
 from Crypto.PublicKey import DSA
+from Crypto.Signature import pkcs1_15
 from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Cipher import AES
 import sys
-from pymongo import HASHED
 #Create DSA key
 # def createDSAkeypair(owner):
 #     key = DSA.generate(2048)
@@ -22,11 +22,17 @@ def loadKeyRSA(fileNamePrefix):
 # Loads key for DSA from pem file, prefix denotes whose key it is, and if it private or public
 def loadKeyDSA(fileNamePrefix):
     return ECC.import_key(open("%s_key_DSA.pem"%(fileNamePrefix)).read())
-# Encrypts bytes using a given key
+# Encrypts bytes using a given key (symmetric), returns the ciphertext as well as the nonce and tag for added authentication and integrity
 def encrypt_message(message, key):
-    cipher_rsa_encrypt = PKCS1_OAEP.new(key, hashAlgo=None, mgfunc=None, randfunc=None)
-    cipherBytes = cipher_rsa_encrypt.encrypt(message)
-    return cipherBytes
+    cipher = AES.new(key, AES.MODE_EAX)
+    nonce = cipher.nonce
+    ciphertext, tag = cipher.encrypt_and_digest(message)
+    return nonce, ciphertext,tag
+# Decrypts a bytes ciphertext using a given key, tag, nonce (symmetric)
+def decrypt_message(nonce, ciphertext, tag, key):
+    cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
+    decrypted_message = cipher.decrypt_and_verify(ciphertext, tag)
+    return decrypted_message
 #Sign message with RSA, key is a imported from a file, message is bytes representation of a string
 def sign_messageRSA(message, key):
     h = SHA256.new(message)
@@ -34,24 +40,23 @@ def sign_messageRSA(message, key):
 #Sign message with DSA, key is a imported from a file, message is bytes representation of a string
 def sign_messageDSA(message, key):
     h = SHA256.new(message)
-    return pss.net(key).sign(h)
-# Decrypts a bytes message using a given key
-def decrypt_message(cipherBytes, key):
-    cipher_rsa_decrypt = PKCS1_OAEP.new(key, hashAlgo=None, mgfunc=None, randfunc=None)
-    decryptedBytes = cipher_rsa_decrypt.decrypt(cipherBytes)
-    return decryptedBytes
-
-def verify_signatureDSA(message, signature, public_key):
-    try:
-        public_key.verify(
-            signature,
-            message.encode('utf-8'),
-            padding.PSS(
-                mgf=padding.MGF1(HASHED.SHA256()),
-                salt_length=padding.PSS.MAX_LENGTH
-            ),
-            utils.Prehashed(utils.Algorithm.SHA256)
-        )
+    signer = DSS.new(key, 'fips-186-3')
+    return signer.sign(h)
+# Verifies RSA signature, message is bytes, returns bool
+def verify_signatureRSA(message, signature, key):
+    try: 
+        h = SHA256.new(message)
+        pkcs1_15.new(key).verify(h, signature)
+        return True
+    except Exception as e:
+        print(f"Signature verification failed: {e}")
+        return False
+# Verifies RSA signature, message is bytes, returns bool
+def verify_signatureDSA(message, signature, key):
+    try: 
+        h = SHA256.new(message)
+        verifier = DSS.new(key, 'fips-186-3')
+        verifier.verify(h, signature)
         return True
     except Exception as e:
         print(f"Signature verification failed: {e}")
