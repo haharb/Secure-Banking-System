@@ -1,68 +1,93 @@
 # bank_server/server.py
+import json
 from flask import Flask, request, jsonify
+from bankserver.crypto import hashPassword, verifyHash
 from db import create_user, get_user_by_id, save_transaction
 from crypto import decrypt_message, loadKeyDSA, loadKeyRSA, verify_signatureDSA, verify_signatureRSA
-key = b"Qp5LsKMC0Pdkh1TDdFUAwiGJjVZMU2yEYi3LKDGfT/8="
+key = b"12345678912345678912345678912345"
 app = Flask(__name__)
 @app.route('/create_user', methods=['POST'])
 def create_user():
-    data = request.json
-    user_id = data.get('user_id')
-    encrypted_credentials = data.get('credentials')
-    signature = data.get('signature')
-    isRSA = data.get('isRSA')
-    # Decrypt the user's credentials using the bank's private key
-    decrypted_credentials = decrypt_message(encrypted_credentials, key)
+    data = request
+    #Decrypt the encrypted data with the symmetric key
+    decrypted_data = decrypt_message(data, key)
+    #Decode the encoded data to get string representation
+    decoded_data = decrypted_data.decode('utf-8')
+    #Data is still in JSON string format at this point, return to tuple format
+    dataTuple = json.loads(decoded_data)
+    #Get user info as dictionary from the tuple
+    userInfo = dataTuple[0]
+    #Get signature from the tuple
+    signature = dataTuple[1]
+    isRSA = userInfo.get('isRSA')
     if isRSA:
         #Load the atm's public key
         atm_public_key = loadKeyRSA("atm_public")
         # Verify the signature using the atm's public key with RSA
-        is_valid_signature = verify_signatureRSA(decrypted_credentials, signature, atm_public_key)
+        is_valid_signature = verify_signatureRSA(bytes(json.dump(userInfo), 'utf-8'), signature, atm_public_key)
     else:
         #Load the atm's public key
         atm_public_key = loadKeyDSA("atm_public")
         # Verify the signature using the atm's public key with DSA
-        is_valid_signature = verify_signatureDSA(decrypted_credentials, signature, atm_public_key)
-    if is_valid_signature:
-        # Check user credentials in the database
-        user = get_user_by_id(user_id)
-        if user:
-            return jsonify({'created': False})
-        else:
-            create_user(user_id, decrypted_credentials['password'])
-            print("User " + user_id)
-            return jsonify({'created':True})
-    return jsonify({'created': False,'isValidSignature': False})
+        is_valid_signature = verify_signatureDSA(bytes(json.dump(userInfo), 'utf-8'), signature, atm_public_key)
+    if not is_valid_signature:
+        print("Signature does not match")
+        return jsonify({'created': False,'isValidSignature': False})
+    user_id = userInfo.get('user_id')
+    
+    # Check user id from the database
+    user = get_user_by_id(user_id)
+    if user:
+        return jsonify({'created': False})
+    else:
+        create_user(user_id, hashPassword(userInfo['password']))
+        print("User " + user_id)
+        return jsonify({'created':True})
 @app.route('/verify_credentials', methods=['POST'])
 def verify_credentials():
-    data = request.json
-    user_id = data.get('user_id')
-    encrypted_credentials = data.get('credentials')
-    signature = data.get('signature')
-    isRSA = data.get('isRSA')
-    # Decrypt the user's credentials using the bank's private key
-    decrypted_credentials = decrypt_message(encrypted_credentials, key)
+    data = request
+    #Decrypt the encrypted data with the symmetric key
+    decrypted_data = decrypt_message(data, key)
+    #Decode the encoded data to get string representation
+    decoded_data = decrypted_data.decode('utf-8')
+    #Data is still in JSON string format at this point, return to tuple format
+    dataTuple = json.loads(decoded_data)
+    #Get user info as dictionary from the tuple
+    userInfo = dataTuple[0]
+    #Get signature from the tuple
+    signature = dataTuple[1]
+    isRSA = userInfo.get('isRSA')
     if isRSA:
         #Load the atm's public key
         atm_public_key = loadKeyRSA("atm_public")
         # Verify the signature using the atm's public key with RSA
-        is_valid_signature = verify_signatureRSA(decrypted_credentials, signature, atm_public_key)
+        is_valid_signature = verify_signatureRSA(bytes(json.dump(userInfo), 'utf-8'), signature, atm_public_key)
     else:
         #Load the atm's public key
         atm_public_key = loadKeyDSA("atm_public")
         # Verify the signature using the atm's public key with DSA
-        is_valid_signature = verify_signatureDSA(decrypted_credentials, signature, atm_public_key)
+        is_valid_signature = verify_signatureDSA(bytes(json.dump(userInfo), 'utf-8'), signature, atm_public_key)
     if is_valid_signature:
         # Check user credentials in the database
-        user = get_user_by_id(user_id)
-        if user and user['password'] == decrypted_credentials['password']:
-            return jsonify({'authenticated': True})
-    
+        user = get_user_by_id(userInfo['user_id'])
+        if user:
+            if verifyHash(userInfo['password'], user['password']):
+                return jsonify({'authenticated': True})
     return jsonify({'authenticated': False})
 
 @app.route('/perform_transaction', methods=['POST'])
 def perform_transaction():
-    data = request.json
+    data = request
+    #Decrypt the encrypted data with the symmetric key
+    decrypted_data = decrypt_message(data, key)
+    #Decode the encoded data to get string representation
+    decoded_data = decrypted_data.decode('utf-8')
+    #Data is still in JSON string format at this point, return to tuple format
+    dataTuple = json.loads(decoded_data)
+    #Get user info as dictionary from the tuple
+    userInfo = dataTuple[0]
+    #Get signature from the tuple
+    signature = dataTuple[1]
     user_id = data.get('user_id')
     action = data.get('action')
     amount = data.get('amount')

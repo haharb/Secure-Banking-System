@@ -4,9 +4,10 @@ import requests
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.backends import default_backend
 from crypto import encrypt_message, loadKeyDSA, loadKeyRSA, sign_messageDSA, sign_messageRSA
-key = b"Qp5LsKMC0Pdkh1TDdFUAwiGJjVZMU2yEYi3LKDGfT/8="
-isRSA = False
+key = b"12345678912345678912345678912345"
+
 class ATM:
+    isRSA = False
     def __init__(self, user_id, password):
         self.user_id = user_id
         self.password = password
@@ -34,58 +35,75 @@ class ATM:
             return 'quit'
         else:
             return 'Invalid'
-    def isRSA():
+    def checkSignatureType(self):
         choice = input("Select an option for digital signature:\n1. RSA\n2. DSA\n")
         if choice == "1":
-            isRSA= True
+            self.isRSA= True
         elif choice == "2":
-            isRSA = False
+            self.isRSA = False
         else:
             print("Invalid choice, defaulting to DSA.\n")
-            isRSA = False
+            self.isRSA = False
     def process_credentials(self, isUser):
-        message = bytes(f"{self.user_id}:{self.password}", encoding = "utf-8")
-        # Encrypt user credentials with symmetric key
-        encrypted_credentials = encrypt_message(message, key)
-        self.isRSA()
-        if isRSA:
-            # Sign the encrypted credentials with the ATM's private key
+        #JSON dictionary with user data
+        json={'user_id': self.user_id, 'password': self.password, 'isRSA':self.isRSA}
+        self.checkSignatureType()
+        if self.isRSA:
+            # Sign the encrypted credentials with the ATM's private key using RSA
             atm_private_key = loadKeyRSA("atm_private")
-            signature = sign_messageRSA(encrypted_credentials, atm_private_key)
+            signature = sign_messageRSA(bytes(json.dumps(json), 'utf-8'), atm_private_key)
         else:
+            # Sign the encrypted credentials with the ATM's private key using DSA
             atm_private_key = loadKeyDSA("atm_private")
-            signature = sign_messageDSA(encrypted_credentials, atm_private_key)
+            signature = sign_messageDSA(bytes(json.dumps(json), 'utf-8'), atm_private_key)
+        #Includes data and its signature to be encrypted
+        dataAndSig = (json,signature)
+        # Serializing the tuple into a JSON formatted string
+        json_string =json.dumps(dataAndSig)
+        #message = bytes(f"{self.user_id}:{self.password}", encoding = "utf-8")
+        # Encode the JSON string into bytes
+        message = json_string.encode('utf-8')
+        # Encrypt message with symmetric key
+        encrypted_message = encrypt_message(message, key)
         if isUser:
-            # Send encrypted credentials and signature to the bank server for verification
+            # Send encrypted message and signature to the bank server for verification
             response = requests.post(
                 'http://bank-server/verify_credentials',
-                json={'user_id': self.user_id, 'credentials': encrypted_credentials, 'signature': signature, 'isRSA':isRSA}
+                encrypted_message
             )
             # Check if the user is authenticated.
             return response.json().get('authenticated', False)
         else:
             response = requests.post(
                 'http://bank-server/create_user',
-                json={'user_id': self.user_id, 'credentials': encrypted_credentials, 'signature': signature}
-            )
+                encrypted_message            )
             # Check if the user was created successfully.
             return response.json().get('created', False)
 
     def perform_transaction(self, action, amount=None):
+        #JSON dictionary to be sent
+        json={'user_id': self.user_id, 'action': action,'amount':amount}
         # Sign the transaction details with the ATM's private key
-        transaction_details = encrypt_message(bytes(f"{self.user_id}:{action}:{amount}", encoding = "utf-8") if amount else bytes(f"{self.user_id}:{action}", encoding = "utf-8"), key)
-        if isRSA:
+        if self.isRSA:
             # Sign the encrypted credentials with the ATM's private key
             atm_private_key = loadKeyRSA("atm_private")
-            signature = sign_messageRSA(transaction_details, atm_private_key)
+            signature = sign_messageRSA(bytes(json.dumps(json), 'utf-8'), atm_private_key)
         else:
             atm_private_key = loadKeyDSA("atm_private")
-            signature = sign_messageDSA(transaction_details, atm_private_key)
-
+            signature = sign_messageDSA(bytes(json.dumps(json), 'utf-8'), atm_private_key)
+        #Includes the data to be sent and signature in a tuple
+        dataAndSig = (json,signature)
+        # Serializing the tuple into a JSON formatted string
+        json_string =json.dumps(json)
+        # Encode the JSON string into bytes
+        message = json_string.encode('utf-8')
+        #transaction_details = encrypt_message(bytes(f"{self.user_id}:{action}:{amount}", encoding = "utf-8") if amount else bytes(f"{self.user_id}:{action}", encoding = "utf-8"), key)
+        # Encrypt message with symmetric key
+        encrypted_message = encrypt_message(message, key)
         # Send transaction details and signature to the bank server for processing
         response = requests.post(
             'http://bank-server/perform_transaction',
-            json={'user_id': self.user_id, 'action': action, 'amount': amount, 'signature': signature}
+            encrypted_message
         )
         # Check the status of the transaction
         return response.json().get('status', 'error')

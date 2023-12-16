@@ -9,6 +9,7 @@ from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Cipher import AES
 import sys
+import bcrypt
 #Create DSA key
 # def createDSAkeypair(owner):
 #     key = DSA.generate(2048)
@@ -18,10 +19,10 @@ import sys
 
 # Loads key for RSA from pem file, prefix denotes whose key it is, and if it private or public
 def loadKeyRSA(fileNamePrefix):
-    return RSA.import_key(open("%s_key_RSA.pem"%(fileNamePrefix)).read())
+    return RSA.import_key(open("%s_keyRSA.pem"%(fileNamePrefix)).read())
 # Loads key for DSA from pem file, prefix denotes whose key it is, and if it private or public
 def loadKeyDSA(fileNamePrefix):
-    return ECC.import_key(open("%s_key_DSA.pem"%(fileNamePrefix)).read())
+    return ECC.import_key(open("%s_keyDSA.pem"%(fileNamePrefix)).read())
 # Encrypts bytes using a given key (symmetric), returns the ciphertext as well as the nonce and tag for added authentication and integrity
 def encrypt_message(message, key):
     cipher = AES.new(key, AES.MODE_EAX)
@@ -60,3 +61,13 @@ def verify_signatureDSA(message, signature, key):
     except Exception as e:
         print(f"Signature verification failed: {e}")
         return False
+#Hashes password using bcrypt
+def hashPassword(password):
+    bytesRep = bytes(password, 'utf-8')
+    # Generate the salt value
+    salt = bcrypt.gensalt()
+    # Hash the password
+    return bcrypt.hashpw(bytesRep, salt)
+#Checks password against the hash
+def verifyHash(password, hash):
+    return bcrypt.checkpw(password, hash)
