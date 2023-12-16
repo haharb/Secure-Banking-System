@@ -22,7 +22,7 @@ def loadKeyRSA(fileNamePrefix):
     return RSA.import_key(open("%s_keyRSA.pem"%(fileNamePrefix)).read())
 # Loads key for DSA from pem file, prefix denotes whose key it is, and if it private or public
 def loadKeyDSA(fileNamePrefix):
-    return ECC.import_key(open("%s_keyDSA.pem"%(fileNamePrefix)).read())
+    return DSA.import_key(open("%s_keyDSA.pem"%(fileNamePrefix)).read())
 # Encrypts bytes using a given key (symmetric), returns the ciphertext as well as the nonce and tag for added authentication and integrity
 def encrypt_message(message, key):
     cipher = AES.new(key, AES.MODE_EAX)
@@ -41,7 +41,8 @@ def sign_messageRSA(message, key):
 #Sign message with DSA, key is a imported from a file, message is bytes representation of a string
 def sign_messageDSA(message, key):
     h = SHA256.new(message)
-    return pss.net(key).sign(h)
+    signer = DSS.new(key, 'fips-186-3')
+    return signer.sign(h)
 # Verifies RSA signature, message is bytes, returns bool
 def verify_signatureRSA(message, signature, key):
     try: 

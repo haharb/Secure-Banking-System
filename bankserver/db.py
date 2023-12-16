@@ -21,11 +21,11 @@ def get_transactions_by_user(user_id):
     #Retrieve previous transactions by user id
     transactions = db.transactions.find({'user_id': user_id})
     return list(transactions)
-def save_transaction(user_id, action, amount, isRSA):
+def save_transaction(user_id, action, amount, signing_algorithm):
     # Save the transaction in the database
     db.transactions.insert_one({
         'user_id': user_id,
         'action': action,
         'amount': amount,
-        'isRSA': isRSA
+        'signing_algorithm': signing_algorithm
     })

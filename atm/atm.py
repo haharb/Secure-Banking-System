@@ -1,3 +1,5 @@
+import base64
+import json
 import sys
 import maskpass
 import requests
@@ -7,21 +9,21 @@ from crypto import encrypt_message, loadKeyDSA, loadKeyRSA, sign_messageDSA, sig
 key = b"12345678912345678912345678912345"
 
 class ATM:
-    isRSA = False
+    signing_algorithm = 'DSA'
     def __init__(self, user_id, password):
         self.user_id = user_id
         self.password = password
-    def getUserInfo():
+    def getUserInfo(self):
         id = input("ID:")
         pwd = maskpass.askpass(prompt="Password:", mask="*")
         return (id, pwd)
-    def greetingScreen():
+    def greetingScreen(self):
         choice = input("ATM At the Moment\n\n\n\n1. Login \n2. Create User\n")
         if choice =="1":
             return True
         else:
             return False 
-    def selectAction():
+    def selectAction(self):
         choice = input("1. Check balance \n2. Make deposit\n3. Withdrawl\n4. View Account Activities\n5. Quit\n")
         if choice == "1":
             return 'display_balance'
@@ -38,28 +40,28 @@ class ATM:
     def checkSignatureType(self):
         choice = input("Select an option for digital signature:\n1. RSA\n2. DSA\n")
         if choice == "1":
-            self.isRSA= True
+            self.signing_algorithm= 'RSA'
         elif choice == "2":
-            self.isRSA = False
+            self.signing_algorithm = 'DSA'
         else:
             print("Invalid choice, defaulting to DSA.\n")
-            self.isRSA = False
+            self.signing_algorithm = 'DSA'
     def process_credentials(self, isUser):
         #JSON dictionary with user data
-        json={'user_id': self.user_id, 'password': self.password, 'isRSA':self.isRSA}
+        json_data={'user_id': self.user_id, 'password': self.password}
         self.checkSignatureType()
-        if self.isRSA:
+        if self.signing_algorithm == 'RSA':
             # Sign the encrypted credentials with the ATM's private key using RSA
             atm_private_key = loadKeyRSA("atm_private")
-            signature = sign_messageRSA(bytes(json.dumps(json), 'utf-8'), atm_private_key)
+            signature = sign_messageRSA(bytes(json.dumps(json_data), 'utf-8'), atm_private_key)
         else:
             # Sign the encrypted credentials with the ATM's private key using DSA
             atm_private_key = loadKeyDSA("atm_private")
-            signature = sign_messageDSA(bytes(json.dumps(json), 'utf-8'), atm_private_key)
-        #Includes data and its signature to be encrypted
-        dataAndSig = (json,signature)
-        # Serializing the tuple into a JSON formatted string
-        json_string =json.dumps(dataAndSig)
+            signature = sign_messageDSA(bytes(json.dumps(json_data), 'utf-8'), atm_private_key)
+        # Base64 encode the signature
+        encoded_signature = base64.b64encode(signature).decode('utf-8')
+        # Serializing the dictionary into a JSON formatted string
+        json_string =json.dumps(json_data)
         #message = bytes(f"{self.user_id}:{self.password}", encoding = "utf-8")
         # Encode the JSON string into bytes
         message = json_string.encode('utf-8')
@@ -69,32 +71,35 @@ class ATM:
             # Send encrypted message and signature to the bank server for verification
             response = requests.post(
                 'http://bank-server/verify_credentials',
-                encrypted_message
+                json = {'data':encrypted_message},
+                headers={"Signature": encoded_signature, 'Signing_algorithm':self.signing_algorithm}
             )
             # Check if the user is authenticated.
             return response.json().get('authenticated', False)
         else:
             response = requests.post(
                 'http://bank-server/create_user',
-                encrypted_message            )
+                json = {'data':encrypted_message},
+                headers={"Signature": encoded_signature, 'Signing_algorithm':self.signing_algorithm}
+            )
             # Check if the user was created successfully.
             return response.json().get('created', False)
 
     def perform_transaction(self, action, amount=None):
         #JSON dictionary to be sent
-        json={'user_id': self.user_id, 'action': action,'amount':amount}
+        json_data={'user_id': self.user_id, 'action': action,'amount':amount}
         # Sign the transaction details with the ATM's private key
-        if self.isRSA:
+        if self.signing_algorithm:
             # Sign the encrypted credentials with the ATM's private key
             atm_private_key = loadKeyRSA("atm_private")
-            signature = sign_messageRSA(bytes(json.dumps(json), 'utf-8'), atm_private_key)
+            signature = sign_messageRSA(bytes(json.dumps(json_data), 'utf-8'), atm_private_key)
         else:
             atm_private_key = loadKeyDSA("atm_private")
-            signature = sign_messageDSA(bytes(json.dumps(json), 'utf-8'), atm_private_key)
-        #Includes the data to be sent and signature in a tuple
-        dataAndSig = (json,signature)
-        # Serializing the tuple into a JSON formatted string
-        json_string =json.dumps(json)
+            signature = sign_messageDSA(bytes(json.dumps(json_data), 'utf-8'), atm_private_key)
+        # Base64 encode the signature
+        encoded_signature = base64.b64encode(signature).decode('utf-8')
+        # Serializing the dictionary into a JSON formatted string
+        json_string =json.dumps(json_data)
         # Encode the JSON string into bytes
         message = json_string.encode('utf-8')
         #transaction_details = encrypt_message(bytes(f"{self.user_id}:{action}:{amount}", encoding = "utf-8") if amount else bytes(f"{self.user_id}:{action}", encoding = "utf-8"), key)
@@ -103,14 +108,17 @@ class ATM:
         # Send transaction details and signature to the bank server for processing
         response = requests.post(
             'http://bank-server/perform_transaction',
-            encrypted_message
+            json = {'data':encrypted_message},
+            headers={"Signature": encoded_signature, 'Signing_algorithm':self.signing_algorithm}
         )
         # Check the status of the transaction
         return response.json().get('status', 'error')
 
 if __name__ == '__main__':
-    isUser = ATM.greetingScreen()
-    cred = ATM.getUserInfo()
+    # Create an instance of the ATM class with dummy values
+    atm_instance = ATM("", "") 
+    isUser = atm_instance.greetingScreen()
+    cred = atm_instance.getUserInfo()
     user_id = cred[0]
     password = cred[1]
     atm = ATM(user_id, password)
