@@ -3,8 +3,6 @@ import json
 import sys
 import maskpass
 import requests
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.backends import default_backend
 from crypto import encrypt_message, loadKeyDSA, loadKeyRSA, sign_messageDSA, sign_messageRSA
 key = b"12345678912345678912345678912345"
 
@@ -66,26 +64,37 @@ class ATM:
         #message = bytes(f"{self.user_id}:{self.password}", encoding = "utf-8")
         # Encode the JSON string into bytes
         message = json_string.encode('utf-8')
-        # Encrypt message with symmetric key
-        encrypted_message = encrypt_message(message, key)
+        # Encrypt message with symmetric key, and receive the triple that contains the nonce, ciphertext and tag
+        triple = encrypt_message(message, key)
+        #Retrieve the ciphertext
+        encrypted_message = triple[1]
+        #Retrieve the nonce
+        nonce = base64.b64encode(triple[0]).decode('utf-8')
+        #Retrieve the tag
+        tag = base64.b64encode(triple[2]).decode('utf-8')
+        encoded_encrypted_message = base64.b64encode(encrypted_message).decode('utf-8')
         if isUser:
             # Send encrypted message and signature to the bank server for verification
             response = requests.post(
                 'http://bank-server/verify_credentials',
-                json = {'data':encrypted_message},
-                headers={"Signature": encoded_signature, 'Signing_algorithm':self.signing_algorithm}
+                json = {'data':encoded_encrypted_message},
+                headers={"Signature": encoded_signature, 'Signing_algorithm':self.signing_algorithm, 'Nonce':nonce, 'Tag': tag},
+                verify= False#Only for non production
             )
-            # Check if the user is authenticated.
-            return response.json().get('authenticated', False)
+            if response:
+                # Check if the user is authenticated.
+                return response.json().get('authenticated', False)
         else:
             response = requests.post(
                 'http://bank-server/create_user',
-                json = {'data':encrypted_message},
-                headers={"Signature": encoded_signature, 'Signing_algorithm':self.signing_algorithm}
+                json = {'data':encoded_encrypted_message},
+                headers={"Signature": encoded_signature, 'Signing_algorithm':self.signing_algorithm, 'Nonce':nonce, 'Tag': tag},
+                verify= False#Only for non production
             )
+        if response:
             # Check if the user was created successfully.
             return response.json().get('created', False)
-
+        return response.json().get('created', True)
     def perform_transaction(self, action, amount=None):
         #JSON dictionary to be sent
         json_data={'user_id': self.user_id, 'action': action,'amount':amount}
@@ -104,13 +113,22 @@ class ATM:
         # Encode the JSON string into bytes
         message = json_string.encode('utf-8')
         #transaction_details = encrypt_message(bytes(f"{self.user_id}:{action}:{amount}", encoding = "utf-8") if amount else bytes(f"{self.user_id}:{action}", encoding = "utf-8"), key)
-        # Encrypt message with symmetric key
-        encrypted_message = encrypt_message(message, key)
+        # Encrypt message with symmetric key, and receive the triple that contains the nonce, ciphertext and tag
+        triple = encrypt_message(message, key)
+        #Retrieve the ciphertext
+        encrypted_message = triple[1]
+        #Retrieve the nonce
+        nonce = triple[0]
+        #Retrieve the tag
+        tag = triple[2]
+        #Encode message to be able to sent
+        encoded_encrypted_message = base64.b64encode(encrypted_message).decode('utf-8')
         # Send transaction details and signature to the bank server for processing
         response = requests.post(
             'http://bank-server/perform_transaction',
-            json = {'data':encrypted_message},
-            headers={"Signature": encoded_signature, 'Signing_algorithm':self.signing_algorithm}
+            json = {'data':encoded_encrypted_message},
+                headers={"Signature": encoded_signature, 'Signing_algorithm':self.signing_algorithm, 'Nonce':nonce, 'Tag': tag},
+                verify= False#Only for non production
         )
         # Check the status of the transaction
         return response.json().get('status', 'error')

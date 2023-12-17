@@ -10,16 +10,23 @@ app = Flask(__name__)
 @app.route('/create_user', methods=['POST'])
 def create_user():
     data = request.json['data']
-    #Decrypt the encrypted data with the symmetric key
-    decrypted_data = decrypt_message(data, key)
+    #Decode data before decryption
+    decoded_encrypted_data = base64.b64decode(data).decode('utf-8')
+    #Get the nonce for comparison
+    nonce = request.headers['Nonce']
+    #Get the tag for comparison
+    tag = request.headers['Tag']
+    #Decrypt the data and compare the nonce and tag for authentication
+    decrypted_data = decrypt_message(nonce, decoded_encrypted_data, tag, key)
     #Decode the encoded data to get string representation
     decoded_data = decrypted_data.decode('utf-8')
-    #Data is still in JSON string format at this point, return to tuple format
+    #Data is still in JSON string format at this point, return to dictionary
     dataJSON = json.loads(decoded_data)
+    
     #Get userinfo from dataJSON
     userInfo = dataJSON['user_id']
     #Get signature from the header
-    signature = request.headers['Signature']
+    signature = base64.b64decode(request.headers['Signature']).decode('utf-8')
     signing_algorithm = request.headers['Signing_algorithm']
     if signing_algorithm == 'RSA':
         #Load the atm's public key
@@ -47,16 +54,20 @@ def create_user():
 @app.route('/verify_credentials', methods=['POST'])
 def verify_credentials():
     data = request.json['data']
-    #Decrypt the encrypted data with the symmetric key
-    decrypted_data = decrypt_message(data, key)
-    #Decode the encoded data to get string representation
-    decoded_data = decrypted_data.decode('utf-8')
+    #Decode data before decryption
+    decoded_encrypted_data = base64.b64decode(data).decode('utf-8')
+    #Get the nonce for comparison
+    nonce = base64.b64decode(request.headers['Nonce']).decode('utf-8')
+    #Get the tag for comparison
+    tag = base64.b64decode(request.headers['Tag']).decode('utf-8')
+    #Decrypt the data and compare the nonce and tag for authentication
+    decrypted_data = decrypt_message(nonce, decoded_encrypted_data, tag, key)
     #Data is still in JSON string format at this point, return to tuple format
-    dataJSON = json.loads(decoded_data)
+    dataJSON = json.loads(decrypted_data)
     #Get userinfo from dataJSON
     userInfo = dataJSON['user_id']
     #Get signature from the header
-    signature = request.headers['Signature']
+    signature = base64.b64decode(request.headers['Signature']).decode('utf-8')
     signing_algorithm = request.headers['Signing_algorithm']
     if signing_algorithm == 'RSA':
         #Load the atm's public key
@@ -79,6 +90,8 @@ def verify_credentials():
 @app.route('/perform_transaction', methods=['POST'])
 def perform_transaction():
     data = request.json
+    #Decode data before decryption
+    decoded_encrypted_data = base64.b64decode(decoded_encrypted_data).decode('utf-8')
     #Decrypt the encrypted data with the symmetric key
     decrypted_data = decrypt_message(data, key)
     #Decode the encoded data to get string representation
@@ -86,7 +99,7 @@ def perform_transaction():
     #Data is still in JSON string format at this point, return to dictionary format
     dataJSON = json.loads(decoded_data)
     #Get signature from the header
-    signature = request.headers['Signature']
+    signature = base64.b64decode(request.headers['Signature']).decode('utf-8')
     signing_algorithm = request.headers['Signing_algorithm']
     user_id = dataJSON.get('user_id')
     action = dataJSON.get('action')
