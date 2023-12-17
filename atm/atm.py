@@ -50,18 +50,19 @@ class ATM:
         #JSON dictionary with user data
         json_data={'user_id': self.user_id, 'password': self.password}
         self.checkSignatureType()
+        # Serializing the dictionary into a JSON formatted string
+        json_string =json.dumps(json_data)
         if self.signing_algorithm == 'RSA':
             # Sign the encrypted credentials with the ATM's private key using RSA
             atm_private_key = loadKeyRSA("atm_private")
-            signature = sign_messageRSA(bytes(json.dumps(json_data), 'utf-8'), atm_private_key)
+            signature = sign_messageRSA(bytes(json_string, 'utf-8'), atm_private_key)
         else:
             # Sign the encrypted credentials with the ATM's private key using DSA
             atm_private_key = loadKeyDSA("atm_private")
-            signature = sign_messageDSA(bytes(json.dumps(json_data), 'utf-8'), atm_private_key)
+            signature = sign_messageDSA(bytes(json_string, 'utf-8'), atm_private_key)
         # Base64 encode the signature
         encoded_signature = base64.b64encode(signature).decode('utf-8')
-        # Serializing the dictionary into a JSON formatted string
-        json_string =json.dumps(json_data)
+
         #message = bytes(f"{self.user_id}:{self.password}", encoding = "utf-8")
         # Encode the JSON string into bytes
         message = json_string.encode('utf-8')
@@ -88,18 +89,18 @@ class ATM:
     def perform_transaction(self, action, amount=None):
         #JSON dictionary to be sent
         json_data={'user_id': self.user_id, 'action': action,'amount':amount}
+        # Serializing the dictionary into a JSON formatted string
+        json_string =json.dumps(json_data)
         # Sign the transaction details with the ATM's private key
         if self.signing_algorithm:
             # Sign the encrypted credentials with the ATM's private key
             atm_private_key = loadKeyRSA("atm_private")
-            signature = sign_messageRSA(bytes(json.dumps(json_data), 'utf-8'), atm_private_key)
+            signature = sign_messageRSA(bytes(json_string, 'utf-8'), atm_private_key)
         else:
             atm_private_key = loadKeyDSA("atm_private")
-            signature = sign_messageDSA(bytes(json.dumps(json_data), 'utf-8'), atm_private_key)
+            signature = sign_messageDSA(bytes(json_string, 'utf-8'), atm_private_key)
         # Base64 encode the signature
         encoded_signature = base64.b64encode(signature).decode('utf-8')
-        # Serializing the dictionary into a JSON formatted string
-        json_string =json.dumps(json_data)
         # Encode the JSON string into bytes
         message = json_string.encode('utf-8')
         #transaction_details = encrypt_message(bytes(f"{self.user_id}:{action}:{amount}", encoding = "utf-8") if amount else bytes(f"{self.user_id}:{action}", encoding = "utf-8"), key)

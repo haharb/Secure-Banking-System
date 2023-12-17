@@ -19,18 +19,18 @@ def create_user():
     #Get userinfo from dataJSON
     userInfo = dataJSON['user_id']
     #Get signature from the header
-    signature = request.header['Signature']
-    signing_algorithm = userInfo.get('Signing_algorithm')
+    signature = request.headers['Signature']
+    signing_algorithm = request.headers['Signing_algorithm']
     if signing_algorithm == 'RSA':
         #Load the atm's public key
         atm_public_key = loadKeyRSA("atm_public")
         # Verify the signature using the atm's public key with RSA
-        is_valid_signature = verify_signatureRSA(bytes(json.dump(userInfo), 'utf-8'), signature, atm_public_key)
+        is_valid_signature = verify_signatureRSA(bytes(json.dumps(dataJSON), 'utf-8'), signature, atm_public_key)
     else:
         #Load the atm's public key
         atm_public_key = loadKeyDSA("atm_public")
         # Verify the signature using the atm's public key with DSA
-        is_valid_signature = verify_signatureDSA(bytes(json.dump(userInfo), 'utf-8'), signature, atm_public_key)
+        is_valid_signature = verify_signatureDSA(bytes(json.dumps(dataJSON), 'utf-8'), signature, atm_public_key)
     if not is_valid_signature:
         print("Signature does not match")
         return jsonify({'created': False,'isValidSignature': False})
@@ -56,18 +56,18 @@ def verify_credentials():
     #Get userinfo from dataJSON
     userInfo = dataJSON['user_id']
     #Get signature from the header
-    signature = request.header['Signature']
-    signing_algorithm = userInfo.get('Signing_algorithm')
+    signature = request.headers['Signature']
+    signing_algorithm = request.headers['Signing_algorithm']
     if signing_algorithm == 'RSA':
         #Load the atm's public key
         atm_public_key = loadKeyRSA("atm_public")
         # Verify the signature using the atm's public key with RSA
-        is_valid_signature = verify_signatureRSA(bytes(json.dump(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
+        is_valid_signature = verify_signatureRSA(bytes(json.dumps(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
     else:
         #Load the atm's public key
         atm_public_key = loadKeyDSA("atm_public")
         # Verify the signature using the atm's public key with DSA
-        is_valid_signature = verify_signatureDSA(bytes(json.dump(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
+        is_valid_signature = verify_signatureDSA(bytes(json.dumps(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
     if is_valid_signature:
         # Check user credentials in the database
         user = get_user_by_id(userInfo)
@@ -86,8 +86,8 @@ def perform_transaction():
     #Data is still in JSON string format at this point, return to dictionary format
     dataJSON = json.loads(decoded_data)
     #Get signature from the header
-    signature = request.header['Signature']
-    signing_algorithm = request.header['Signing_algorithm']
+    signature = request.headers['Signature']
+    signing_algorithm = request.headers['Signing_algorithm']
     user_id = dataJSON.get('user_id')
     action = dataJSON.get('action')
     amount = dataJSON.get('amount')
@@ -99,12 +99,12 @@ def perform_transaction():
             #Load the atm's public key
             atm_public_key = loadKeyRSA("atm_public")
             # Verify the signature using the atm's public key with RSA
-            is_valid_signature = verify_signatureRSA(bytes(json.dump(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
+            is_valid_signature = verify_signatureRSA(bytes(json.dumps(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
     else:
         #Load the atm's public key
         atm_public_key = loadKeyDSA("atm_public")
         # Verify the signature using the atm's public key with DSA
-        is_valid_signature = verify_signatureDSA(bytes(json.dump(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
+        is_valid_signature = verify_signatureDSA(bytes(json.dumps(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
     if is_valid_signature:
         if user:
             if action == 'deposit':
