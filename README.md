@@ -1,6 +1,6 @@
 # Securing Banking System
 Group Members: Chalmers Tse/
-Contributions:/
+Contributions:
 - Chalmers Tse - Written the Final Report
 
 ### Instructions to Run the Program:
