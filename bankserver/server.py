@@ -120,12 +120,12 @@ def perform_transaction():
             #Load the atm's public key
             atm_public_key = loadKeyRSA("atm_public")
             # Verify the signature using the atm's public key with RSA
-            is_valid_signature = verify_signatureRSA(bytes(json.dumps(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
+            is_valid_signature = verify_signatureRSA(bytes(json.dumps(dataJSON), 'utf-8'), signature, atm_public_key)
     else:
         #Load the atm's public key
         atm_public_key = loadKeyDSA("atm_public")
         # Verify the signature using the atm's public key with DSA
-        is_valid_signature = verify_signatureDSA(bytes(json.dumps(dataJSON), 'utf-8'), base64.b64decode(signature), atm_public_key)
+        is_valid_signature = verify_signatureDSA(bytes(json.dumps(dataJSON), 'utf-8'), signature, atm_public_key)
     if is_valid_signature:
         if user:
             if action == 'deposit':
@@ -136,7 +136,7 @@ def perform_transaction():
                 else:
                     return jsonify({'status':'insufficient balance'})
             # Example: Perform transaction logic and save the transaction in the database
-            save_transaction(user_id, action, amount)
+            save_transaction(user_id, action, amount,signing_algorithm )
             return jsonify({'status': 'success', 'balance':balance})
     else:
         return jsonify({'authenticated': False, 'status' : 'error'})
