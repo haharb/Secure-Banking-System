@@ -2,16 +2,14 @@
 import base64
 import json
 from flask import Flask, request, jsonify
-from crypto import hashPassword, verifyHash
-from db import add_user_to_db, get_user_by_id, save_transaction
+from crypto import encrypt_message, hashPassword, verifyHash
+from db import add_user_to_db, get_transactions_by_user, get_user_by_id, save_transaction
 from crypto import decrypt_message, loadKeyDSA, loadKeyRSA, verify_signatureDSA, verify_signatureRSA
 key = b"12345678912345678912345678912345"
 app = Flask(__name__)
 @app.route('/create_user', methods=['POST'])
 def create_user():
     data = request.json['data']
-    print("THE REQUEST HEADER ITEMS ARE AS FOLLOWS")
-    print(request.headers)
     #Decode data before decryption
     decoded_encrypted_data = base64.b64decode(data)
     #Get the nonce for comparison
@@ -42,13 +40,13 @@ def create_user():
         return jsonify({'created': False,'isValidSignature': False})
     #Get user_id
     user_id = dataJSON['user_id']
-    #Get password as bytes to hash
-    password = bytes(dataJSON['password'], 'utf-8')
+    #Get password to hash
+    password =dataJSON['password']
     # Check user id from the database
     user = get_user_by_id(user_id)
     if user:
         print("User already exists.")
-        return jsonify({'created': False})
+        return jsonify({'status': 'duplicate','created': False})
     else:
         add_user_to_db(user_id, hashPassword(password))
         print("User " + user_id)
@@ -87,8 +85,8 @@ def verify_credentials():
         # Check user credentials in the database
         user = get_user_by_id(user_id)
         if user:
-            #Get password as bytes to hash
-            password = bytes(dataJSON['password'], 'utf-8')
+            #Get password to hash
+            password = dataJSON['password']
             if verifyHash(password, user['password']):
                 return jsonify({'authenticated': True})
     return jsonify({'authenticated': False})
@@ -111,7 +109,10 @@ def perform_transaction():
     signing_algorithm = request.headers["SIGNINGALGORITHM"]
     user_id = dataJSON.get('user_id')
     action = dataJSON.get('action')
+    #Cast to integer to be able to do arithmetic operations
     amount = dataJSON.get('amount')
+    if amount:
+        intamount = int(amount)
     user = get_user_by_id(user_id)
     balance = user['balance']
     # Validate the user's identity and perform the transaction
@@ -129,17 +130,39 @@ def perform_transaction():
     if is_valid_signature:
         if user:
             if action == 'deposit':
-                balance += amount
-            elif action == 'withdrawl':
-                if balance >= amount:
-                    balance =- amount
+                balance += intamount
+            elif action == 'withdrawal':
+                if balance >= intamount:
+                    balance -= intamount
                 else:
                     return jsonify({'status':'insufficient balance'})
             # Example: Perform transaction logic and save the transaction in the database
-            save_transaction(user_id, action, amount,signing_algorithm )
+            save_transaction(user_id, action, amount, balance )
             return jsonify({'status': 'success', 'balance':balance})
+        elif action == 'account_activities':
+            return       
     else:
         return jsonify({'authenticated': False, 'status' : 'error'})
-
+@app.route('/get_transactions', methods=['GET'])
+def get_transactions():
+    user_id = request.args.get('user_id')
+    if user_id:
+        #Encode to bytes the json string form of the message
+        transactions = bytes(json.dumps(get_transactions_by_user(user_id)), 'utf-8')
+        #Encrypt the message using symmetric key encryption, the result is a triple of nonce ciphertext and tag
+        triple = encrypt_message(transactions, key)
+        #Get the ciphertext from the triple
+        encrypted_transactions = triple[1]
+        #Get the nonce from the triple
+        nonce = triple[0]
+        #Get the tag from the triple
+        tag = triple[2]
+        #Encode to be able to send across the net
+        encoded_encrypted_transactions = base64.b64encode(encrypted_transactions).decode('utf-8')
+        encoded_nonce = base64.b64encode(nonce).decode('utf-8')
+        encoded_tag = base64.b64encode(tag).decode('utf-8')
+        return {'data':encoded_encrypted_transactions, 'nonce': encoded_nonce, 'tag' : encoded_tag}
+    else:
+        return jsonify({'error': 'User ID is missing'}), 400  # Return a 400 Bad Request status if user_id is missing
 if __name__ == '__main__':
     app.run(debug=True)

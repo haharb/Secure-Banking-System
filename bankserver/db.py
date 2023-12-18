@@ -1,4 +1,5 @@
 # bank_server/db.py
+from datetime import datetime
 from pymongo import MongoClient
 
 # Connect to the MongoDB server
@@ -20,12 +21,20 @@ def get_user_by_id(user_id):
 def get_transactions_by_user(user_id):
     #Retrieve previous transactions by user id
     transactions = db.transactions.find({'user_id': user_id})
-    return list(transactions)
-def save_transaction(user_id, action, amount, signing_algorithm):
+    # Convert ObjectId to string
+    transactions_list = [
+        {**transaction, '_id': str(transaction['_id'])} 
+        for transaction in transactions
+    ]
+    return transactions_list
+def save_transaction(user_id, action, amount, balance):
+    # Save the updated user document back to the database
+    db.users.update_one({'user_id': user_id}, {'$set': {'balance': balance}})
     # Save the transaction in the database
     db.transactions.insert_one({
         'user_id': user_id,
         'action': action,
         'amount': amount,
-        'Signing_algorithm': signing_algorithm
+        #Format date time as a string for a cleaner look
+        'date_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     })

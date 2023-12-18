@@ -62,13 +62,14 @@ def verify_signatureDSA(message, signature, key):
     except Exception as e:
         print(f"Signature verification failed: {e}")
         return False
-#Hashes password using bcrypt
+#Hashes password using bcrypt, password input is string
 def hashPassword(password):
     bytesRep = bytes(password, 'utf-8')
     # Generate the salt value
     salt = bcrypt.gensalt()
     # Hash the password
     return bcrypt.hashpw(bytesRep, salt)
-#Checks password against the hash
+#Checks password against the hash, password input is string
 def verifyHash(password, hash):
-    return bcrypt.checkpw(password, hash)
+    bytesRep = bytes(password, 'utf-8')
+    return bcrypt.checkpw(bytesRep, hash)

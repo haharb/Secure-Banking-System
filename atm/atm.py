@@ -3,7 +3,7 @@ import json
 import sys
 import maskpass
 import requests
-from crypto import encrypt_message, loadKeyDSA, loadKeyRSA, sign_messageDSA, sign_messageRSA
+from crypto import decrypt_message, encrypt_message, loadKeyDSA, loadKeyRSA, sign_messageDSA, sign_messageRSA
 #TEMP KEY ##REMOVE## or change
 key = b"12345678912345678912345678912345"
 
@@ -35,13 +35,13 @@ class ATM:
     #Prompts user to select an action to perform, choices are view balance, make a deposit, withrdrawl money, and check account activites.
     def selectAction(self):
         while True:
-            choice = input("1. Check balance \n2. Make deposit\n3. Withdrawl\n4. View Account Activities\n5. Quit\n")
+            choice = input("1. Check balance \n2. Make deposit\n3. Withdrawal\n4. View Account Activities\n5. Quit\n")
             if choice == "1":
                 return 'display_balance'
             elif choice == "2":
                 return 'deposit'
             elif choice == "3":
-                return 'withdrawl'
+                return 'withdrawal'
             elif choice == "4":
                 return 'account_activities'
             elif choice == "5":
@@ -101,6 +101,10 @@ class ATM:
                 headers={"SIGNATURE": encoded_signature, "SIGNINGALGORITHM": self.signing_algorithm, "NONCE": nonce, "TAG": tag},
                 verify=False  # Only for non-production
             )
+            if response.json()['status'] == 'duplicate':
+                print("User already exists!")
+                print("\nExiting.")
+                sys.exit()
         #Printing for debugging purposeses ##REMOVE##
         print("Response Content:", response.text)
         #Make sure the response exists first
@@ -158,7 +162,39 @@ class ATM:
         else:
             print("Empty response received.")
             return "error"
-
+    #Get list of transactions to be shown 
+    def get_transactions(self):
+        response = requests.get(
+            'http://localhost:5000/get_transactions',
+            params={'user_id': self.user_id},
+            verify=False  # Only for non-production
+        )
+        # Retrieve the data only if the GET request was succesful
+        if response.ok:
+                try:
+                    response_data = response.json()
+                    # Decode the encoded encrypted transactions
+                    encoded_encrypted_transactions = response_data['data']
+                    # Decode the nonce and tag
+                    nonce = base64.b64decode(response_data['nonce'])
+                    tag = base64.b64decode(response_data['tag'])
+                    
+                    # Decrypt the transactions, and check the nonce and tags to protect against replays and assure authenticity
+                    transactions = json.loads(decrypt_message(nonce, base64.b64decode(encoded_encrypted_transactions), tag, key).decode('utf-8'))
+                    print("Your account activities:")
+                    if len(transactions) == 0:
+                        print("You have made no transactions yet.")
+                    else:
+                        # Some transactions didn't have a specific amount
+                        for transaction in transactions:
+                            if transaction['amount'] is not None:
+                                print(f"Action: {transaction['action']}, Amount: {transaction['amount']} on {transaction['date_time']}")
+                            else:
+                                print(f"Action: {transaction['action']} on {transaction['date_time']}")
+                except json.decoder.JSONDecodeError:
+                    print("Invalid JSON in response.")
+        else:
+            print("Error in the request. HTTP Status Code:", response.status_code)   
 
 if __name__ == '__main__':
     atm_instance = ATM("", "", False)
@@ -173,13 +209,15 @@ if __name__ == '__main__':
             if action == 'quit':
                 print("Exiting the program.")
                 sys.exit()
-            elif action == 'deposit' or action == 'withdrawl':
+            elif action == 'deposit' or action == 'withdrawal':
                 amount = input("Enter amount:")
                 result = atm.perform_transaction(action, amount)
                 print(f"Transaction Status: {result}")
             elif action == 'display_balance':
                 result = atm.perform_transaction(action)
-                print("Your balance is\n")
-                print(result['balance'])
+                print("Your balance is\n\n")
+                print(str(result['balance'])+ "\n\n")
+            elif action == 'account_activities':
+                transactions = atm.get_transactions()
     else:
-        print("Authentication failed.")
+        print("Authentication failed.\nBye bye!")
