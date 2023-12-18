@@ -15,6 +15,6 @@ MAX_USERNAME_LENGTH = 20
 # Transaction types
 DISPLAY_BALANCE = "display_balance"
 DEPOSIT = "deposit"
-WITHDRAWAL = "withdrawal"
+WITHDRAWL = "withdrawl"
 ACCOUNT_ACTIVITIES = "account_activities"
 QUIT = "quit"

@@ -4,7 +4,7 @@ from pymongo import MongoClient
 # Connect to the MongoDB server
 client = MongoClient('mongodb://localhost:27017/')
 db = client['bank_database']
-def create_user(user_id, password, balance = 0):
+def add_user_to_db(user_id, password, balance = 0):
     # Create a new user document
     user = {
         'user_id': user_id,
@@ -27,5 +27,5 @@ def save_transaction(user_id, action, amount, signing_algorithm):
         'user_id': user_id,
         'action': action,
         'amount': amount,
-        'signing_algorithm': signing_algorithm
+        'Signing_algorithm': signing_algorithm
     })
