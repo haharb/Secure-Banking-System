@@ -114,18 +114,18 @@ class ATM:
                 headers={"SIGNATURE": encoded_signature, "SIGNINGALGORITHM": self.signing_algorithm, "NONCE": nonce, "TAG": tag},
                 verify=False  # Only for non-production
             )
-            if response.json()['status'] == 'duplicate':
-                print("User already exists!")
-                print("\nExiting.")
-                sys.exit()
+
         #Make sure the response exists first
         if response.text:
-
             try:
                 response_data = response.json()
             except json.decoder.JSONDecodeError:
                 print("Invalid JSON in response.")
                 return False
+            if response_data['status'] == 'duplicate':
+                print("User already exists!")
+                print("\nExiting.")
+                sys.exit()
             if response_data['authenticated']:
                 print("Welcome!")
             if 'authenticated' in response_data:
@@ -164,7 +164,6 @@ class ATM:
             headers={"SIGNATURE": encoded_signature, "SIGNINGALGORITHM": self.signing_algorithm, "NONCE": nonce, "TAG": tag},
             verify=False  # Only for non-production
         )
-        print("Response Content:", response.text)
         if response.text:
             try:
                 response_data = response.json()
@@ -238,7 +237,7 @@ if __name__ == '__main__':
             elif action == 'deposit' or action == 'withdrawal':
                 amount = input("Enter amount:")
                 result = atm.perform_transaction(action, amount)
-                print(f"Transaction Status: {result}")
+                print(f"Transaction Successful, balance =  {result['balance']}")
             elif action == 'display_balance':
                 result = atm.perform_transaction(action)
                 print("Your balance is\n\n")

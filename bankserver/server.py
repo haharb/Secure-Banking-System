@@ -36,7 +36,7 @@ def create_user():
         # Verify the signature using the atm's public key with DSA
         is_valid_signature = verify_signatureDSA(bytes(json.dumps(dataJSON), 'utf-8'), signature, atm_public_key)
     if not is_valid_signature:
-        return jsonify({'created': False,'isValidSignature': False})
+        return jsonify({'status': 'False','created': False,'isValidSignature': False})
     #Get user_id
     user_id = dataJSON['user_id']
     #Get password to hash
@@ -45,11 +45,11 @@ def create_user():
     user = get_user_by_id(user_id)
     if user:
         print("User already exists.")
-        return jsonify({'status': 'duplicate','created': False})
+        return jsonify({'status': 'duplicate','created': False,'authenticated' : False})
     else:
         add_user_to_db(user_id, hashPassword(password))
         print("User " + user_id)
-        return jsonify({'created':True})
+        return jsonify({'status':'new' ,'created':True, 'authenticated' : True})
 @app.route('/verify_credentials', methods=['POST'])
 def verify_credentials():
     data = request.json['data']
@@ -87,8 +87,8 @@ def verify_credentials():
             #Get password to hash
             password = dataJSON['password']
             if verifyHash(password, user['password']):
-                return jsonify({'authenticated': True})
-    return jsonify({'authenticated': False})
+                return jsonify({'status':'complete','authenticated': True})
+    return jsonify({'status':'completed','authenticated': False})
 
 @app.route('/perform_transaction', methods=['POST'])
 def perform_transaction():
