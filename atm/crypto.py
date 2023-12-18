@@ -9,12 +9,6 @@ from Crypto.PublicKey import ECC
 from Crypto.Signature import DSS
 from Crypto.Cipher import AES
 import sys
-#Create DSA key
-# def createDSAkeypair(owner):
-#     key = DSA.generate(2048)
-#     f = open("public_key.pem", "w")
-#     f.write(key.publickey().export_key())
-#     f.close()
 
 # Loads key for RSA from pem file, prefix denotes whose key it is, and if it private or public
 def loadKeyRSA(fileNamePrefix):

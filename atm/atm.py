@@ -3,7 +3,8 @@ import json
 import sys
 import maskpass
 import requests
-from crypto import decrypt_message, encrypt_message, loadKeyDSA, loadKeyRSA, sign_messageDSA, sign_messageRSA
+from flask import jsonify
+from crypto import decrypt_message, encrypt_message, loadKeyDSA, loadKeyRSA, sign_messageDSA, sign_messageRSA, verify_signatureDSA, verify_signatureRSA
 #TEMP KEY ##REMOVE## or change
 key = b"12345678912345678912345678912345"
 
@@ -17,9 +18,21 @@ class ATM:
         self.isUser = isUser
 
     def getUserInfo(self):
-        id = input("ID:")
-        pwd = maskpass.askpass(prompt="Password:", mask="*")
-        return (id, pwd)
+        while True:
+            #Remove leading/trailing whitespaces
+            id = input("ID: ").strip()  
+            if not id:
+                print("ID cannot be empty. Please try again.")
+                continue
+
+            pwd = maskpass.askpass(prompt="Password: ", mask="*")
+            if not pwd:
+                print("Password cannot be empty. Please try again.")
+                continue
+
+            # If both ID and password are non-empty, return the values
+            return (id, pwd)
+        
     #Has the bank name and prompts user to login if returning user, or create an account otherwise.
     def greetingScreen(self):
         print("\n\n\n\n\n At the Moment\n\n\n      ATM")
@@ -105,16 +118,16 @@ class ATM:
                 print("User already exists!")
                 print("\nExiting.")
                 sys.exit()
-        #Printing for debugging purposeses ##REMOVE##
-        print("Response Content:", response.text)
         #Make sure the response exists first
         if response.text:
+
             try:
                 response_data = response.json()
             except json.decoder.JSONDecodeError:
                 print("Invalid JSON in response.")
                 return False
-
+            if response_data['authenticated']:
+                print("Welcome!")
             if 'authenticated' in response_data:
                 return response_data['authenticated']
             elif 'created' in response_data:
@@ -125,7 +138,7 @@ class ATM:
         else:
             print("Empty response received.")
             return False
-#Performs the requested transaction or action, from the list within the selectAction function
+    #Performs the requested transaction or action, from the list within the selectAction function
     def perform_transaction(self, action, amount=None):
         json_data = {'user_id': self.user_id, 'action': action, 'amount': amount}
         json_string = json.dumps(json_data)
@@ -166,7 +179,7 @@ class ATM:
     def get_transactions(self):
         response = requests.get(
             'http://localhost:5000/get_transactions',
-            params={'user_id': self.user_id},
+            params={'user_id': self.user_id, 'signature_algorithm': self.signing_algorithm},
             verify=False  # Only for non-production
         )
         # Retrieve the data only if the GET request was succesful
@@ -178,19 +191,32 @@ class ATM:
                     # Decode the nonce and tag
                     nonce = base64.b64decode(response_data['nonce'])
                     tag = base64.b64decode(response_data['tag'])
-                    
+                    signature = base64.b64decode(response_data['signature'])
                     # Decrypt the transactions, and check the nonce and tags to protect against replays and assure authenticity
                     transactions = json.loads(decrypt_message(nonce, base64.b64decode(encoded_encrypted_transactions), tag, key).decode('utf-8'))
-                    print("Your account activities:")
-                    if len(transactions) == 0:
-                        print("You have made no transactions yet.")
+                    if self.signing_algorithm == 'RSA':
+                        #Load the atm's public key
+                        atm_public_key = loadKeyRSA("bank_public")
+                        # Verify the signature using the atm's public key with RSA
+                        is_valid_signature = verify_signatureRSA(bytes(json.dumps(transactions), 'utf-8'), signature, atm_public_key)
                     else:
-                        # Some transactions didn't have a specific amount
-                        for transaction in transactions:
-                            if transaction['amount'] is not None:
-                                print(f"Action: {transaction['action']}, Amount: {transaction['amount']} on {transaction['date_time']}")
-                            else:
-                                print(f"Action: {transaction['action']} on {transaction['date_time']}")
+                        #Load the atm's public key
+                        atm_public_key = loadKeyDSA("bank_public")
+                        # Verify the signature using the atm's public key with DSA
+                        is_valid_signature = verify_signatureDSA(bytes(json.dumps(transactions), 'utf-8'), signature, atm_public_key)
+                    if not is_valid_signature:
+                        print("Authentication failed. Signature did not match.")
+                    else:
+                        print("Your account activities:")
+                        if len(transactions) == 0:
+                            print("You have made no transactions yet.")
+                        else:
+                            # Some transactions didn't have a specific amount
+                            for transaction in transactions:
+                                if transaction['amount'] is not None:
+                                    print(f"Action: {transaction['action']}, Amount: {transaction['amount']} on {transaction['date_time']}")
+                                else:
+                                    print(f"Action: {transaction['action']} on {transaction['date_time']}")
                 except json.decoder.JSONDecodeError:
                     print("Invalid JSON in response.")
         else:
@@ -219,5 +245,7 @@ if __name__ == '__main__':
                 print(str(result['balance'])+ "\n\n")
             elif action == 'account_activities':
                 transactions = atm.get_transactions()
+
+                
     else:
         print("Authentication failed.\nBye bye!")

@@ -2,7 +2,7 @@
 import base64
 import json
 from flask import Flask, request, jsonify
-from crypto import encrypt_message, hashPassword, verifyHash
+from crypto import encrypt_message, hashPassword, sign_messageDSA, sign_messageRSA, verifyHash
 from db import add_user_to_db, get_transactions_by_user, get_user_by_id, save_transaction
 from crypto import decrypt_message, loadKeyDSA, loadKeyRSA, verify_signatureDSA, verify_signatureRSA
 key = b"12345678912345678912345678912345"
@@ -36,7 +36,6 @@ def create_user():
         # Verify the signature using the atm's public key with DSA
         is_valid_signature = verify_signatureDSA(bytes(json.dumps(dataJSON), 'utf-8'), signature, atm_public_key)
     if not is_valid_signature:
-        print("Signature does not match")
         return jsonify({'created': False,'isValidSignature': False})
     #Get user_id
     user_id = dataJSON['user_id']
@@ -146,6 +145,7 @@ def perform_transaction():
 @app.route('/get_transactions', methods=['GET'])
 def get_transactions():
     user_id = request.args.get('user_id')
+    signing_algorithm = request.args.get('signature_algorithm')
     if user_id:
         #Encode to bytes the json string form of the message
         transactions = bytes(json.dumps(get_transactions_by_user(user_id)), 'utf-8')
@@ -161,7 +161,14 @@ def get_transactions():
         encoded_encrypted_transactions = base64.b64encode(encrypted_transactions).decode('utf-8')
         encoded_nonce = base64.b64encode(nonce).decode('utf-8')
         encoded_tag = base64.b64encode(tag).decode('utf-8')
-        return {'data':encoded_encrypted_transactions, 'nonce': encoded_nonce, 'tag' : encoded_tag}
+        if signing_algorithm == 'RSA':
+            bank_private_key = loadKeyRSA("bank_private")
+            signature = sign_messageRSA(transactions, bank_private_key)
+        else:
+            bank_private_key = loadKeyDSA("bank_private")
+            signature = sign_messageDSA(transactions, bank_private_key)
+        signature = base64.b64encode(signature).decode('utf-8')
+        return {'data':encoded_encrypted_transactions, 'nonce': encoded_nonce, 'tag' : encoded_tag, 'signature' : signature}
     else:
         return jsonify({'error': 'User ID is missing'}), 400  # Return a 400 Bad Request status if user_id is missing
 if __name__ == '__main__':
