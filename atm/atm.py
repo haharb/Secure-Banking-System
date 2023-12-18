@@ -168,17 +168,18 @@ if __name__ == '__main__':
     password = cred[1]
     atm = ATM(user_id, password, isUser)
     if atm.process_credentials():
-        action = atm.selectAction()
-        if action == 'quit':
-            print("Exiting the program.")
-            sys.exit()
-        elif action == 'deposit' or action == 'withdrawl':
-            amount = input("Enter amount:")
-            result = atm.perform_transaction(action, amount)
-            print(f"Transaction Status: {result}")
-        elif action == 'display_balance':
-            result = atm.perform_transaction(action)
-            print("Your balance is\n")
-            print(result['balance'])
+        while True:
+            action = atm.selectAction()
+            if action == 'quit':
+                print("Exiting the program.")
+                sys.exit()
+            elif action == 'deposit' or action == 'withdrawl':
+                amount = input("Enter amount:")
+                result = atm.perform_transaction(action, amount)
+                print(f"Transaction Status: {result}")
+            elif action == 'display_balance':
+                result = atm.perform_transaction(action)
+                print("Your balance is\n")
+                print(result['balance'])
     else:
         print("Authentication failed.")
