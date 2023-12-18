@@ -4,10 +4,11 @@ import sys
 import maskpass
 import requests
 from crypto import encrypt_message, loadKeyDSA, loadKeyRSA, sign_messageDSA, sign_messageRSA
-
+#TEMP KEY ##REMOVE## or change
 key = b"12345678912345678912345678912345"
 
 class ATM:
+    #Default Signing algorithm
     signing_algorithm = 'DSA'
 
     def __init__(self, user_id, password, isUser):
@@ -19,7 +20,7 @@ class ATM:
         id = input("ID:")
         pwd = maskpass.askpass(prompt="Password:", mask="*")
         return (id, pwd)
-
+    #Has the bank name and prompts user to login if returning user, or create an account otherwise.
     def greetingScreen(self):
         print("\n\n\n\n\n At the Moment\n\n\n      ATM")
         while True:
@@ -31,7 +32,7 @@ class ATM:
             else:
                 print("Invalid choice. Please enter 1 or 2.")
 
-
+    #Prompts user to select an action to perform, choices are view balance, make a deposit, withrdrawl money, and check account activites.
     def selectAction(self):
         while True:
             choice = input("1. Check balance \n2. Make deposit\n3. Withdrawl\n4. View Account Activities\n5. Quit\n")
@@ -47,7 +48,7 @@ class ATM:
                 return 'quit'
             else:
                 print("Invalid choice. Please enter a number between 1 and 5.")
-
+    #Prompts user to choose a digital signature algorithm, the choices are RSA and DSA
     def checkSignatureType(self):
         choice = input("Select an option for digital signature:\n1. RSA\n2. DSA\n")
         if choice == "1":
@@ -59,26 +60,34 @@ class ATM:
             self.signing_algorithm = 'DSA'
 
     def process_credentials(self):
+        #Data to be encrypted and sent
         json_data = {'user_id': self.user_id, 'password': self.password}
-        self.checkSignatureType()
+        #Serializing the dictionary into a JSON string before sending
         json_string = json.dumps(json_data)
-        
         # Signing algorithm check for RSA
+        self.checkSignatureType()
         if self.signing_algorithm == 'RSA':
             atm_private_key = loadKeyRSA("atm_private")
             signature = sign_messageRSA(bytes(json_string, 'utf-8'), atm_private_key)
         else:
             atm_private_key = loadKeyDSA("atm_private")
             signature = sign_messageDSA(bytes(json_string, 'utf-8'), atm_private_key)
-
+        #Encode with base64 to be able to send bytes objects over network
         encoded_signature = base64.b64encode(signature).decode('utf-8')
         message = json_string.encode('utf-8')
+        #Encrypt the encoded message to receive the tuple including nonce, ciphertext, and tag
         triple = encrypt_message(message, key)
+        #Retrieve the ciphertext from the tuple
         encrypted_message = triple[1]
+        #Encode with base64 to be able to send bytes objects over network
         nonce = base64.b64encode(triple[0]).decode('utf-8')
         tag = base64.b64encode(triple[2]).decode('utf-8')
         encoded_encrypted_message = base64.b64encode(encrypted_message).decode('utf-8')
+        #Check if creating a new user or logging in to post to the respective route
         if self.isUser:
+            #The data in the JSON file is the encoded and encrypted message
+            #The headers include the encoded signature, the user's signing algorithm choice (RSA or DSA), the nonce and tag for decryption 
+            #Verify is set to false since this is a non-production environmnet, we can create a self signed certificate and have it set here, we might revisit and fix.
             response = requests.post(
                 'http://localhost:5000/verify_credentials',
                 json={'data': encoded_encrypted_message},
@@ -92,7 +101,9 @@ class ATM:
                 headers={"SIGNATURE": encoded_signature, "SIGNINGALGORITHM": self.signing_algorithm, "NONCE": nonce, "TAG": tag},
                 verify=False  # Only for non-production
             )
+        #Printing for debugging purposeses ##REMOVE##
         print("Response Content:", response.text)
+        #Make sure the response exists first
         if response.text:
             try:
                 response_data = response.json()
@@ -110,11 +121,11 @@ class ATM:
         else:
             print("Empty response received.")
             return False
-
+#Performs the requested transaction or action, from the list within the selectAction function
     def perform_transaction(self, action, amount=None):
         json_data = {'user_id': self.user_id, 'action': action, 'amount': amount}
         json_string = json.dumps(json_data)
-        
+        #The chosen digital signature algorithm
         if self.signing_algorithm == 'RSA':
             atm_private_key = loadKeyRSA("atm_private")
             signature = sign_messageRSA(bytes(json_string, 'utf-8'), atm_private_key)
